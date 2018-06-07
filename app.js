@@ -1,15 +1,15 @@
-var AWS = require('aws-sdk');
-var config = require('config');
-var http = require('http');
-var fs = require('fs');
-var path = require('path');
+const AWS = require('aws-sdk');
+const config = require('config');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
 AWS.config.update({region: config.get("aws.region")});
 process.env.AWS_ACCESS_KEY_ID = config.get("aws.credentials.id");
 process.env.AWS_SECRET_ACCESS_KEY = config.get("aws.credentials.key");
-var sqs = new AWS.SQS({apiVersion: '2012-11-05'});
-var queueURL = config.get("aws.queue_url");
-var params = {
+const sqs = new AWS.SQS({apiVersion: '2012-11-05'});
+const queueURL = config.get("aws.queue_url");
+const params = {
     AttributeNames: [
         "SentTimestamp"
     ],
@@ -18,10 +18,10 @@ var params = {
         "All"
     ],
     QueueUrl: queueURL,
-    VisibilityTimeout: 0,
-    WaitTimeSeconds: 0
+    VisibilityTimeout: 10,
+    WaitTimeSeconds: 20
 };
-var processingData = false;
+let processingData = false;
 
 setInterval(checking, 1000);
 
@@ -30,35 +30,49 @@ function main() {
         if (err) {
             console.log("Receive Error", err);
         } else if (data.Messages) {
-            var deleteParams = {
-                QueueUrl: queueURL,
-                ReceiptHandle: data.Messages[0].ReceiptHandle
+            let temp;
+            let link;
+            let deleteParams = {
+                Entries: [],
+                QueueUrl: queueURL
             };
-            var temp;
-            var link;
-            data.Messages.forEach(function (item, i, arr) {
-                temp = JSON.parse(data.Messages[i].Body);
+
+            data.Messages.forEach(function (item, i) {
+                let duplicate = false;
+                deleteParams.Entries.forEach(function (item1, i) {
+                    if (item1.Id === item.MessageId) {
+                        duplicate = true;
+                    }
+                });
+                if (duplicate) {
+                    return;
+                }
+
+                deleteParams.Entries.push({
+                    Id: item.MessageId,
+                    ReceiptHandle: item.ReceiptHandle
+                });
+                temp = JSON.parse(item.Body);
                 temp = JSON.parse(temp.Message);
-                var link_key = temp.Records[0].s3.object.key;
+                let link_key = temp.Records[0].s3.object.key;
                 link = config.get("aws.link") + link_key;
 
-                var file = fs.createWriteStream(config.get("data_path") + path.basename(link_key));
-                var request = http.get(link, function (response) {
+                let file = fs.createWriteStream(config.get("data_path") + path.basename(link_key));
+                let request = http.get(link, function (response) {
                     response.pipe(file);
                 });
-
-                // sqs.deleteMessage(params, function (err, data) {
-                //     if (err) console.log(err, err.stack);
-                //     else console.log(data);
-                // });
-            })
+            });
+            sqs.deleteMessageBatch(deleteParams, function (err, data) {
+                if (err) console.log(err, err.stack);
+                else console.log(data);
+            });
         }
         processingData = false;
     });
 }
 
 function checking() {
-    if (processingData == false) {
+    if (processingData === false) {
         processingData = true;
         main();
     }

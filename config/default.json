@@ -8,5 +8,7 @@
     "queue_url": "https://sqs.eu-west-1.amazonaws.com/...",
     "link": "http://s3.amazonaws.com/noaa-nexrad-level2/"
   },
-  "data_path": "./data/"
+  "data_path": "./data/",
+  "amqp_url": "amqp://localhost",
+  "queue_name": "q"
 }

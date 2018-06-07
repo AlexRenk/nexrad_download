@@ -1,0 +1,11 @@
+{
+  "name": "nexrad",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {},
+  "dependencies": {
+    "amqplib": "^0.5.2",
+    "aws-sdk": "^2.251.1",
+    "config": "^1.30.0"
+  }
+}

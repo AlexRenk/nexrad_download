@@ -2,7 +2,6 @@ const AWS = require('aws-sdk');
 const config = require('config');
 const path = require('path');
 const amqp = require('amqplib/callback_api');
-const timestamp = require('unix-timestamp');
 
 AWS.config.update({region: config.get("aws.region")});
 process.env.AWS_ACCESS_KEY_ID = config.get("aws.credentials.id");
@@ -33,12 +32,7 @@ let upload_data = {
     "storage_png_path": "",
     "added": 0
 };
-let year;
-let month;
-let day;
-let hour;
-let min;
-let sec;
+let time={};
 
 setInterval(checking, 5000);
 
@@ -69,9 +63,11 @@ function main() {
                 QueueUrl: queueURL
             };
 
-            data.Messages.forEach(function (item, i) {
+            data.Messages.forEach(function (item) {
                 let duplicate = false;
-                deleteParams.Entries.forEach(function (item1, i) {
+                let file_name;
+                let link_key;
+                deleteParams.Entries.forEach(function (item1) {
                     if (item1.Id === item.MessageId) {
                         duplicate = true;
                     }
@@ -86,19 +82,20 @@ function main() {
                 });
                 temp = JSON.parse(item.Body);
                 temp = JSON.parse(temp.Message);
-                let link_key = temp.Records[0].s3.object.key;
+                link_key = temp.Records[0].s3.object.key;
                 link = config.get("aws.link") + link_key;
-
+                file_name=path.basename(link_key);
+                
                 upload_data.id = upload_data.abbreviation = path.basename(link_key).substr(0, 4);
                 upload_data.image_url = link;
-                year = parseInt(path.basename(link_key).substr(4, 4), 10);
-                month = parseInt(path.basename(link_key).substr(8, 2), 10);
-                day = parseInt(path.basename(link_key).substr(10, 2), 10);
-                hour = parseInt(path.basename(link_key).substr(13, 2), 10);
-                min = parseInt(path.basename(link_key).substr(15, 2), 10);
-                sec = parseInt(path.basename(link_key).substr(17, 2), 10);
-                upload_data.timestamp = timestamp.fromDate(new Date(year, month, day, hour, min, sec));
-                upload_data.added = Math.floor(timestamp.now());
+                time.year = +file_name.substr(4, 4);
+                time.month = +file_name.substr(8, 2);
+                time.day = +file_name.substr(10, 2);
+                time.hour = +file_name.substr(13, 2);
+                time.min = +file_name.substr(15, 2);
+                time.sec = +file_name.substr(17, 2);
+                upload_data.timestamp = Math.floor((new Date(time.year, time.month, time.day, time.hour, time.min, time.sec)).getTime() / 1000);
+                upload_data.added = Math.floor((new Date()).getTime() / 1000);
                 channel.sendToQueue(config.get("queue_name"), new Buffer(JSON.stringify(upload_data)));
                 console.log(upload_data.image_url);
             });
